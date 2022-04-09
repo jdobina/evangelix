@@ -116,7 +116,7 @@ clean-minisat:
 # KLEE-UCLIBC #
 
 klee-uclibc: $(KLEE_UCLIBC_DIR)
-	cd $(KLEE_UCLIBC_DIR) && ./configure --make-llvm-lib && make -j2
+	cd $(KLEE_UCLIBC_DIR) && git apply $(ANGELIX_ROOT)/0001-Pass-no-check-certificate-to-wget.patch && ./configure --make-llvm-lib && make -j2
 
 $(KLEE_UCLIBC_DIR):
 	cd build && git clone --depth=1 $(KLEE_UCLIBC_URL)

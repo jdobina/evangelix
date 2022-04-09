@@ -1,0 +1,25 @@
+From d3270aa59d73a8cbd5169a039bef1e644bb521c8 Mon Sep 17 00:00:00 2001
+From: Jake Daryll Obina <jake.obina@gmail.com>
+Date: Sat, 9 Apr 2022 12:57:07 +0800
+Subject: [PATCH] Pass --no-check-certificate to wget
+
+---
+ extra/locale/Makefile.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/extra/locale/Makefile.in b/extra/locale/Makefile.in
+index 430c80658..506e424a0 100644
+--- a/extra/locale/Makefile.in
++++ b/extra/locale/Makefile.in
+@@ -11,7 +11,7 @@ WGET := $(shell command -v wget 2> /dev/null)
+ CURL := $(shell command -v curl 2> /dev/null)
+ 
+ ifneq (, $(WGET))
+-GET += $(WGET) --passive-ftp
++GET += $(WGET) --passive-ftp --no-check-certificate
+ else
+ ifneq (, $(CURL))
+ GET += $(CURL) -OL
+-- 
+2.25.1
+
