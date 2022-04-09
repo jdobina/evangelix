@@ -22,8 +22,7 @@ RUN apt-get -y install git wget xz-utils build-essential \
 
 RUN apt-get install software-properties-common -y --no-install-recommends
 
-RUN git clone --recursive https://github.com/mechtaev/angelix.git --depth 1
-
+COPY . /angelix/
 
 RUN apt-get purge icedtea-* openjdk-* -y
 RUN add-apt-repository -y ppa:openjdk-r/ppa && apt-get update && sudo apt-get install -y openjdk-8-jdk
