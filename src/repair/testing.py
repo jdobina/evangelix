@@ -1,4 +1,5 @@
 import os
+import signal
 from os.path import basename, join, exists
 from utils import cd
 import subprocess
@@ -57,11 +58,16 @@ class Tester:
                                     env=environment,
                                     stdout=subproc_output,
                                     stderr=subproc_output,
-                                    shell=True)
+                                    shell=True,
+                                    preexec_fn=os.setsid)
             if klee or self.config['test_timeout'] is None: # KLEE has its own timeout
                 code = proc.wait()
             else:
-                code = proc.wait(timeout=self.config['test_timeout'])
+                try:
+                    code = proc.wait(timeout=self.config['test_timeout'])
+                except subprocess.TimeoutExpired:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    code = proc.wait()
 
         instrumented = True
         if dump is not None or trace is not None or klee:
