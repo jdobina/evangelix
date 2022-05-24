@@ -552,6 +552,7 @@ public:
       Matcher.addMatcher(RepairableAssignment, &HandlerForIntegerExpressions);
       Matcher.addMatcher(InterestingRepairableCondition, &HandlerForBooleanExpressions);
       Matcher.addMatcher(InterestingStatement, &HandlerForStatements);
+      Matcher.addMatcher(RepairableReturnValue, &HandlerForIntegerExpressions);
     }
   }
 

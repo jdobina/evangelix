@@ -38,6 +38,8 @@ class RepairableTransformer:
             environment['ANGELIX_DELETIONS_DEFECT_CLASS'] = 'YES'
         if 'guards' in self.config['defect']:
             environment['ANGELIX_GUARDS_DEFECT_CLASS'] = 'YES'
+        if 'return-values' in self.config['defect']:
+            environment['ANGELIX_RETURN_VALUES_DEFECT_CLASS'] = 'YES'
         if self.config['ignore_trivial']:
             environment['ANGELIX_IGNORE_TRIVIAL'] = 'YES'
         if self.config['semfix']:

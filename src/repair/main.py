@@ -44,7 +44,8 @@ SYNTHESIS_LEVELS = ['alternatives',
 DEFECT_CLASSES = ['if-conditions',
                   'assignments',
                   'loop-conditions',
-                  'guards']
+                  'guards',
+                  'return-values']
 
 
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']

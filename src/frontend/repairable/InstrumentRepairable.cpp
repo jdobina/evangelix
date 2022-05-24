@@ -122,6 +122,9 @@ public:
 
         if (getenv("ANGELIX_ASSIGNMENTS_DEFECT_CLASS"))
           Matcher.addMatcher(RepairableAssignment, &HandlerForExpressions);
+
+        if (getenv("ANGELIX_RETURN_VALUES_DEFECT_CLASS"))
+          Matcher.addMatcher(RepairableReturnValue, &HandlerForExpressions);
       }
       if (getenv("ANGELIX_GUARDS_DEFECT_CLASS"))
         Matcher.addMatcher(InterestingStatement, &HandlerForStatements);
