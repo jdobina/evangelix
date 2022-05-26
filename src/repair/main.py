@@ -45,7 +45,8 @@ DEFECT_CLASSES = ['if-conditions',
                   'assignments',
                   'loop-conditions',
                   'guards',
-                  'return-values']
+                  'return-values',
+                  'missing-returns']
 
 
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']

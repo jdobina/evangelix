@@ -246,6 +246,12 @@ StatementMatcher RepairableReturnValue =
   returnStmt(has(RepairableExpression));
 
 
+StatementMatcher RepairableMissingReturn =
+  ifStmt(hasDescendant(compoundStmt()),
+         unless(hasDescendant(returnStmt()))
+        ).bind("repairable");
+
+
 //TODO: currently these selectors are not completely orthogonal
 // for example, if RHS of assignment contains if condition like here:
 // x = ({ if (...) {...}; 1; });
