@@ -222,8 +222,8 @@ class Angelix:
         suspicious = self.get_suspicious_groups(self.validation_test_suite, positive_traces, negative_traces)
 
         if self.config['localize_only']:
-            for idx, (group, score) in enumerate(suspicious):
-                logger.info('group {}: {} ({})'.format(idx+1, group, score))
+            #for idx, (group, score) in enumerate(suspicious):
+            #    logger.info('group {}: {} ({})'.format(idx+1, group, score))
             exit(0)
 
         if len(suspicious) == 0:
