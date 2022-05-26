@@ -15,6 +15,34 @@ class TransformationError(Exception):
     pass
 
 
+class BuggyTransformer:
+
+    def __init__(self, config):
+        self.config = config
+        if self.config['verbose']:
+            self.subproc_output = sys.stderr
+        else:
+            self.subproc_output = subprocess.DEVNULL
+
+    def __call__(self, project):
+        src = basename(project.dir)
+        logger.info('making {} source repairable'.format(src))
+        environment = dict(os.environ)
+        if 'missing-returns' in self.config['defect']:
+            environment['ANGELIX_MISSING_RETURNS_DEFECT_CLASS'] = 'YES'
+        with cd(project.dir):
+            return_code = subprocess.call(['make-repairable', project.buggy],
+                                          stderr=self.subproc_output,
+                                          stdout=self.subproc_output,
+                                          env=environment)
+        if return_code != 0:
+            if self.config['ignore_trans_errors']:
+                logger.warning("transformation of {} failed".format(relpath(project.dir)))
+            else:
+                logger.error("transformation of {} failed".format(relpath(project.dir)))
+                raise TransformationError()
+
+
 class RepairableTransformer:
 
     def __init__(self, config):
@@ -40,8 +68,6 @@ class RepairableTransformer:
             environment['ANGELIX_GUARDS_DEFECT_CLASS'] = 'YES'
         if 'return-values' in self.config['defect']:
             environment['ANGELIX_RETURN_VALUES_DEFECT_CLASS'] = 'YES'
-        if 'missing-returns' in self.config['defect']:
-            environment['ANGELIX_MISSING_RETURNS_DEFECT_CLASS'] = 'YES'
         if self.config['ignore_trivial']:
             environment['ANGELIX_IGNORE_TRIVIAL'] = 'YES'
         if self.config['semfix']:

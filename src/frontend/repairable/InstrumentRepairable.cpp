@@ -97,69 +97,9 @@ private:
 };
 
 
-class MissingReturnHandler : public MatchFinder::MatchCallback {
-public:
-  MissingReturnHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
-
-  virtual void run(const MatchFinder::MatchResult &Result) {
-    if (const IfStmt *ifS = Result.Nodes.getNodeAs<clang::IfStmt>("repairable")) {
-      SourceManager &srcMgr = Rewrite.getSourceMgr();
-      const LangOptions &langOpts = Rewrite.getLangOpts();
-
-      if (insideMacro(ifS, srcMgr, langOpts))
-        return;
-
-      const Stmt *then = ifS->getThen();
-      SourceRange expandedLoc = getExpandedLoc(then, srcMgr);
-
-      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
-      if (srcMgr.getMainFileID() != decLoc.first)
-        return;
-
-      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
-      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
-      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
-      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
-
-      std::cout << "mrh: ";
-
-      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
-                << toString(ifS) << "\n";
-
-      std::ostringstream stringStream;
-      stringStream << "if ("
-                   << "angelix_trace_and_load("
-                   << 1 << ", "
-                   << endLine << ", "
-                   << endColumn << ", "
-                   << endLine << ", "
-                   << endColumn
-                   << ")"
-                   << ") \n"
-                   << "return "
-                   << "angelix_trace_and_load("
-                   << 0 << ", "
-                   << (endLine + 1) << ", "
-                   << (endColumn + 7) << ", "
-                   << (endLine + 1) << ", "
-                   << (endColumn + 7)
-                   << ")"
-                   << ";";
-      std::string insertion = stringStream.str();
-
-      Rewrite.InsertText(then->getLocEnd(), insertion, true, true);
-    }
-  }
-
-private:
-  Rewriter &Rewrite;
-};
-
-
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R) : HandlerForExpressions(R), HandlerForStatements(R),
-                               HandlerForMissingReturns(R) {
+  MyASTConsumer(Rewriter &R) : HandlerForExpressions(R), HandlerForStatements(R) {
     if (getenv("ANGELIX_SEMFIX_MODE")) {
       Matcher.addMatcher(InterestingCondition, &HandlerForExpressions);
       Matcher.addMatcher(InterestingIntegerAssignment, &HandlerForExpressions);
@@ -185,9 +125,6 @@ public:
 
         if (getenv("ANGELIX_RETURN_VALUES_DEFECT_CLASS"))
           Matcher.addMatcher(RepairableReturnValue, &HandlerForExpressions);
-
-        if (getenv("ANGELIX_MISSING_RETURNS_DEFECT_CLASS"))
-          Matcher.addMatcher(RepairableMissingReturn, &HandlerForMissingReturns);
       }
       if (getenv("ANGELIX_GUARDS_DEFECT_CLASS"))
         Matcher.addMatcher(InterestingStatement, &HandlerForStatements);
@@ -201,7 +138,6 @@ public:
 private:
   ExpressionHandler HandlerForExpressions;
   StatementHandler HandlerForStatements;
-  MissingReturnHandler HandlerForMissingReturns;
   MatchFinder Matcher;
 };
 

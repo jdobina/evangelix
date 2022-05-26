@@ -12,7 +12,7 @@ import sys
 import re
 import statistics
 import time
-from transformation import PrintfTransformer
+from transformation import PrintfTransformer, BuggyTransformer
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,9 @@ class Project:
         self.configure_cmd = configure_cmd
 
     def initialize(self):
+        self.make_repairable = BuggyTransformer(self.config)
+        self.make_repairable(self)
+
         if self.config['instr_printf'] is not None:
             self.configure()
             self.instrument_printf = PrintfTransformer(self.config)
@@ -172,7 +175,6 @@ class Frontend(Project):
         compile_end_time = time.time()
         compile_elapsed = compile_end_time - compile_start_time
         statistics.data['time']['compilation'] += compile_elapsed
-
 
 
 class Backend(Project):

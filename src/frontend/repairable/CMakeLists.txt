@@ -10,3 +10,13 @@ target_link_libraries(instrument-repairable
   clangBasic
   clangASTMatchers
   )
+
+add_clang_executable(make-repairable
+  MakeRepairable.cpp
+  )
+
+target_link_libraries(make-repairable
+  clangTooling
+  clangBasic
+  clangASTMatchers
+  )
