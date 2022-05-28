@@ -30,7 +30,7 @@ class Project:
         else:
             self.subproc_output = subprocess.DEVNULL
         self.dir = dir
-        self.buggy = buggy
+        self.buggy = join(self.dir, buggy)
         self.build_cmd = build_cmd
         self.configure_cmd = configure_cmd
 
@@ -43,14 +43,14 @@ class Project:
             self.instrument_printf = PrintfTransformer(self.config)
             self.instrument_printf(self, self.config['instr_printf'])
 
-        self._buggy_backup = join(self.dir, self.buggy) + '.backup'
-        shutil.copyfile(join(self.dir, self.buggy), self._buggy_backup)
+        self._buggy_backup = self.buggy + '.backup'
+        shutil.copyfile(self.buggy, self._buggy_backup)
 
     def restore_buggy(self):
-        shutil.copyfile(self._buggy_backup, join(self.dir, self.buggy))
+        shutil.copyfile(self._buggy_backup, self.buggy)
 
     def diff_buggy(self):
-        return diff(self._buggy_backup, join(self.dir, self.buggy))
+        return diff(self._buggy_backup, self.buggy)
 
     def import_compilation_db(self, compilation_db):
         compilation_db = copy.deepcopy(compilation_db)
