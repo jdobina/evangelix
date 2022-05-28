@@ -216,3 +216,29 @@ class PrintfTransformer:
                 raise TransformationError()
 
         pass
+
+
+class RepairedTransformer:
+
+    def __init__(self, config):
+        self.config = config
+        if self.config['verbose']:
+            self.subproc_output = sys.stderr
+        else:
+            self.subproc_output = subprocess.DEVNULL
+
+    def __call__(self, project):
+        src = basename(project.dir)
+        logger.info('tidying {} source'.format(src))
+        environment = dict(os.environ)
+        with cd(project.dir):
+            return_code = subprocess.call(['tidy', project.buggy],
+                                          stderr=self.subproc_output,
+                                          stdout=self.subproc_output,
+                                          env=environment)
+        if return_code != 0:
+            if self.config['ignore_trans_errors']:
+                logger.warning("transformation of {} failed".format(relpath(project.dir)))
+            else:
+                logger.error("transformation of {} failed".format(relpath(project.dir)))
+                raise TransformationError()

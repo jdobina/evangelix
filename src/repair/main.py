@@ -14,7 +14,8 @@ from project import Validation, Frontend, Backend, CompilationError
 from utils import format_time, time_limit, TimeoutException
 from runtime import Dump, Trace, Load
 from transformation import RepairableTransformer, SuspiciousTransformer, \
-                           FixInjector, TransformationError
+                           FixInjector, TransformationError, \
+                           RepairedTransformer
 from testing import Tester
 from localization import Localizer
 from reduction import Reducer
@@ -93,6 +94,7 @@ class Angelix:
         self.instrument_for_localization = RepairableTransformer(config)
         self.instrument_for_inference = SuspiciousTransformer(config, extracted)
         self.apply_patch = FixInjector(config)
+        self.tidy = RepairedTransformer(config)
 
         validation_dir = join(working_dir, "validation")
         shutil.copytree(src, validation_dir, symlinks=True)
@@ -297,6 +299,8 @@ class Angelix:
                 continue
             repaired = len(neg) == 0
             if repaired:
+                self.tidy(self.validation_src)
+                self.validation_src.build()
                 patches.append(self.validation_src.diff_buggy(self.buggy))
             neg = list(set(neg) & set(self.repair_test_suite))
             current_positive, current_negative = pos, neg
@@ -335,6 +339,8 @@ class Angelix:
                 pos, neg = self.evaluate(self.validation_src)
                 repaired = len(neg) == 0
                 if repaired:
+                    self.tidy(self.validation_src)
+                    self.validation_src.build()
                     patches.append(self.validation_src.diff_buggy(self.buggy))
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
