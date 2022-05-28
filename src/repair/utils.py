@@ -63,3 +63,18 @@ def unique(list):
     """Select unique elements (order preserving)"""
     seen = set()
     return [x for x in list if not (x in seen or seen.add(x))]
+
+
+import difflib
+from os.path import join, basename
+
+
+def diff(path1, path2):
+    with open(path1, encoding='latin-1') as file1:
+        file1_lines = file1.readlines()
+    with open(path2, encoding='latin-1') as file2:
+        file2_lines = file2.readlines()
+    return difflib.unified_diff(file1_lines,
+                                file2_lines,
+                                fromfile=join('a', basename(path1)),
+                                tofile=join('b', basename(path2)))

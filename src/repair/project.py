@@ -1,11 +1,10 @@
 import copy
-import difflib
 import os
 from os.path import join, exists, relpath, basename, realpath
 import shutil
 import subprocess
 import json
-from utils import cd
+from utils import cd, diff
 import logging
 import tempfile
 import sys
@@ -51,13 +50,7 @@ class Project:
         shutil.copyfile(self._buggy_backup, join(self.dir, self.buggy))
 
     def diff_buggy(self):
-        with open(join(self.dir, self.buggy), encoding='latin-1') as buggy:
-            buggy_lines = buggy.readlines()
-        with open(self._buggy_backup, encoding='latin-1') as backup:
-            backup_lines = backup.readlines()
-        return difflib.unified_diff(backup_lines, buggy_lines,
-                                    fromfile=join('a', self.buggy),
-                                    tofile=join('b', self.buggy))
+        return diff(self._buggy_backup, join(self.dir, self.buggy))
 
     def import_compilation_db(self, compilation_db):
         compilation_db = copy.deepcopy(compilation_db)
