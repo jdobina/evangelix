@@ -49,8 +49,11 @@ class Project:
     def restore_buggy(self):
         shutil.copyfile(self._buggy_backup, self.buggy)
 
-    def diff_buggy(self):
-        return diff(self._buggy_backup, self.buggy)
+    def diff_buggy(self, fromfile=None):
+        if fromfile is None:
+            fromfile = self._buggy_backup
+
+        return diff(fromfile, self.buggy)
 
     def import_compilation_db(self, compilation_db):
         compilation_db = copy.deepcopy(compilation_db)

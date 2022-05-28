@@ -70,6 +70,7 @@ class Angelix:
 
     def __init__(self, working_dir, src, buggy, oracle, tests, golden, asserts, lines, build, configure, config):
         self.working_dir = working_dir
+        self.buggy = join(src, buggy)
         self.config = config
         self.repair_test_suite = tests[:]
         self.validation_test_suite = tests[:]
@@ -296,7 +297,7 @@ class Angelix:
                 continue
             repaired = len(neg) == 0
             if repaired:
-                patches.append(self.validation_src.diff_buggy())
+                patches.append(self.validation_src.diff_buggy(self.buggy))
             neg = list(set(neg) & set(self.repair_test_suite))
             current_positive, current_negative = pos, neg
 
@@ -334,7 +335,7 @@ class Angelix:
                 pos, neg = self.evaluate(self.validation_src)
                 repaired = len(neg) == 0
                 if repaired:
-                    patches.append(self.validation_src.diff_buggy())
+                    patches.append(self.validation_src.diff_buggy(self.buggy))
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
 
