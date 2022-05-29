@@ -11,7 +11,8 @@ import sys
 import re
 import statistics
 import time
-from transformation import PrintfTransformer, BuggyTransformer
+from transformation import PrintfTransformer, BuggyTransformer, \
+                           RepairedTransformer
 
 
 logger = logging.getLogger(__name__)
@@ -34,9 +35,17 @@ class Project:
         self.build_cmd = build_cmd
         self.configure_cmd = configure_cmd
 
-    def initialize(self):
         self.make_repairable = BuggyTransformer(self.config)
+        self.tidy = RepairedTransformer(config)
+
+    def initialize(self):
+        self._orig_buggy = self.buggy + '.orig'
+        shutil.copyfile(self.buggy, self._orig_buggy)
+
         self.make_repairable(self)
+
+        self._repairable_buggy = self.buggy + '.repairable'
+        shutil.copyfile(self.buggy, self._repairable_buggy)
 
         if self.config['instr_printf'] is not None:
             self.configure()
@@ -49,11 +58,40 @@ class Project:
     def restore_buggy(self):
         shutil.copyfile(self._buggy_backup, self.buggy)
 
-    def diff_buggy(self, fromfile=None):
-        if fromfile is None:
-            fromfile = self._buggy_backup
+    def repair_buggy(self):
+        repaired_with_instr_buggy = self.buggy + '.repaired_with_instr'
+        shutil.copyfile(self.buggy, repaired_with_instr_buggy)
 
-        return diff(fromfile, self.buggy)
+        shutil.copyfile(self._orig_buggy, self.buggy)
+
+        repairable_diff = join(self.dir, 'repairable.diff')
+        rc = subprocess.call('diff {} {} > {}'.format(self._orig_buggy,
+                                                      self._repairable_buggy,
+                                                      repairable_diff),
+                             shell=True)
+        assert(rc == 0 or rc == 1)
+        subprocess.check_call('patch -z .pbak {} {}'.format(self.buggy,
+                                                            repairable_diff),
+                              shell=True,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+
+        repair_with_instr_diff = join(self.dir, 'repair_with_instr.diff')
+        rc = subprocess.call('diff {} {} > {}'.format(self._buggy_backup,
+                                                      repaired_with_instr_buggy,
+                                                      repair_with_instr_diff),
+                             shell=True)
+        assert(rc == 0 or rc == 1)
+        subprocess.check_call('patch -z .pbak {} {}'.format(self.buggy,
+                                                            repair_with_instr_diff),
+                              shell=True,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+
+        self.tidy(self)
+
+    def repair_diff(self):
+        return diff(self._orig_buggy, self.buggy)
 
     def import_compilation_db(self, compilation_db):
         compilation_db = copy.deepcopy(compilation_db)

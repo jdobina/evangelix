@@ -14,8 +14,7 @@ from project import Validation, Frontend, Backend, CompilationError
 from utils import format_time, time_limit, TimeoutException
 from runtime import Dump, Trace, Load
 from transformation import RepairableTransformer, SuspiciousTransformer, \
-                           FixInjector, TransformationError, \
-                           RepairedTransformer
+                           FixInjector, TransformationError
 from testing import Tester
 from localization import Localizer
 from reduction import Reducer
@@ -71,7 +70,6 @@ class Angelix:
 
     def __init__(self, working_dir, src, buggy, oracle, tests, golden, asserts, lines, build, configure, config):
         self.working_dir = working_dir
-        self.buggy = join(src, buggy)
         self.config = config
         self.repair_test_suite = tests[:]
         self.validation_test_suite = tests[:]
@@ -94,7 +92,6 @@ class Angelix:
         self.instrument_for_localization = RepairableTransformer(config)
         self.instrument_for_inference = SuspiciousTransformer(config, extracted)
         self.apply_patch = FixInjector(config)
-        self.tidy = RepairedTransformer(config)
 
         validation_dir = join(working_dir, "validation")
         shutil.copytree(src, validation_dir, symlinks=True)
@@ -299,9 +296,9 @@ class Angelix:
                 continue
             repaired = len(neg) == 0
             if repaired:
-                self.tidy(self.validation_src)
+                self.validation_src.repair_buggy()
                 self.validation_src.build()
-                patches.append(self.validation_src.diff_buggy(self.buggy))
+                patches.append(self.validation_src.repair_diff())
             neg = list(set(neg) & set(self.repair_test_suite))
             current_positive, current_negative = pos, neg
 
@@ -339,9 +336,9 @@ class Angelix:
                 pos, neg = self.evaluate(self.validation_src)
                 repaired = len(neg) == 0
                 if repaired:
-                    self.tidy(self.validation_src)
+                    self.validation_src.repair_buggy()
                     self.validation_src.build()
-                    patches.append(self.validation_src.diff_buggy(self.buggy))
+                    patches.append(self.validation_src.repair_diff())
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
 
@@ -407,7 +404,9 @@ class Angelix:
             logger.info("tests {} fail".format(negative))
             return []
         else:
-            return [self.validation_src.diff_buggy()]
+            self.validation_src.repair_buggy()
+            self.validation_src.build()
+            return [self.validation_src.repair_diff()]
 
 
 if __name__ == "__main__":
