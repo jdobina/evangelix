@@ -50,10 +50,57 @@ private:
 };
 
 
+StatementMatcher TidyableCondExpr =
+  anyOf(ifStmt(hasCondition(expr().bind("tidyable"))),
+        whileStmt(hasCondition(expr().bind("tidyable")))
+       );
+
+
+class CondExprHandler : public MatchFinder::MatchCallback {
+public:
+  CondExprHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const Expr *expr = Result.Nodes.getNodeAs<clang::Expr>("tidyable")) {
+      if (expr->getStmtClass() != Expr::ParenExprClass)
+          return;
+
+      const ParenExpr *parenExpr = cast<ParenExpr>(expr);
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(parenExpr, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(parenExpr, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(parenExpr) << "\n";
+
+      std::string replacement = toString(parenExpr->getSubExpr());
+      Rewrite.ReplaceText(expandedLoc, replacement);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R) : HandlerForExtraIfs(R) {
+  MyASTConsumer(Rewriter &R) : HandlerForExtraIfs(R), HandlerForCondExprs(R) {
     Matcher.addMatcher(TidyableExtraIf, &HandlerForExtraIfs);
+    Matcher.addMatcher(TidyableCondExpr, &HandlerForCondExprs);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -62,6 +109,7 @@ public:
 
 private:
   ExtraIfHandler HandlerForExtraIfs;
+  CondExprHandler HandlerForCondExprs;
   MatchFinder Matcher;
 };
 
