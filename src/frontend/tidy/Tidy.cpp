@@ -96,11 +96,74 @@ private:
 };
 
 
+StatementMatcher TrueExpression =
+  anyOf(integerLiteral(equals(1)),
+        binaryOperator(hasOperatorName("=="),
+                       hasLHS(integerLiteral(equals(0))),
+                       hasRHS(integerLiteral(equals(0)))
+                      )
+       );
+
+
+StatementMatcher FalseExpression =
+  anyOf(integerLiteral(equals(0)),
+        unaryOperator(hasOperatorName("!"),
+                      hasUnaryOperand(ignoringParenImpCasts(TrueExpression)))
+       );
+
+
+StatementMatcher TidyableDeadIf =
+  ifStmt(hasCondition(ignoringParenImpCasts(FalseExpression)),
+         unless(hasElse(stmt())),
+         unless(hasDescendant(compoundStmt()))
+        ).bind("tidyable");
+
+
+class DeadIfHandler : public MatchFinder::MatchCallback {
+public:
+  DeadIfHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const IfStmt *ifS = Result.Nodes.getNodeAs<clang::IfStmt>("tidyable")) {
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(ifS, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(ifS, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(ifS) << "\n";
+
+      Rewriter::RewriteOptions removeOpts;
+      removeOpts.RemoveLineIfEmpty = true;
+      Rewrite.RemoveText(expandedLoc, removeOpts);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R) : HandlerForExtraIfs(R), HandlerForCondExprs(R) {
+  MyASTConsumer(Rewriter &R) : HandlerForExtraIfs(R),
+                               HandlerForCondExprs(R),
+                               HandlerForDeadIfs(R) {
     Matcher.addMatcher(TidyableExtraIf, &HandlerForExtraIfs);
     Matcher.addMatcher(TidyableCondExpr, &HandlerForCondExprs);
+    Matcher.addMatcher(TidyableDeadIf, &HandlerForDeadIfs);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -110,6 +173,7 @@ public:
 private:
   ExtraIfHandler HandlerForExtraIfs;
   CondExprHandler HandlerForCondExprs;
+  DeadIfHandler HandlerForDeadIfs;
   MatchFinder Matcher;
 };
 
