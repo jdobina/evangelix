@@ -692,7 +692,7 @@ if __name__ == "__main__":
         exit(1)
 
     end = time.time()
-    elapsed = format_time(end - start)
+    elapsed = '{}s'.format(int(end - start))
     statistics.data['time']['total'] = end - start
     statistics.save()
 
