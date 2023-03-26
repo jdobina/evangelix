@@ -73,6 +73,13 @@ class Angelix:
         self.config = config
         self.repair_test_suite = tests[:]
         self.validation_test_suite = tests[:]
+        self.current_repair_suite = []
+        self.positive_tests = []
+        self.negative_tests = []
+        self.positive_traces = []
+        self.negative_traces = []
+        self.fixes = []
+        self.partial_fix = None
         extracted = join(working_dir, 'extracted')
         os.mkdir(extracted)
 
@@ -154,10 +161,10 @@ class Angelix:
         return positive, negative
 
 
-    def generate_patch(self):
-        positive, negative = self.evaluate(self.validation_src)
+    def localize_faults(self):
+        self.positive_tests, self.negative_tests = self.evaluate(self.validation_src)
         logger.info(('positive tests: {}, negative tests: {}'
-                    ).format(positive, negative))
+                    ).format(self.positive_tests, self.negative_tests))
 
         self.frontend_src.configure()
         if config['build_before_instr']:
@@ -166,9 +173,9 @@ class Angelix:
         self.frontend_src.build()
 
         testing_start_time = time.time()
-        if len(positive) > 0:
+        if len(self.positive_tests) > 0:
             logger.info('running positive tests for debugging')
-        for test in positive:
+        for test in self.positive_tests:
             self.trace += test
             if test not in self.dump:
                 self.dump += test
@@ -183,9 +190,9 @@ class Angelix:
         golden_is_built = False
         excluded = []
 
-        if len(negative) > 0:
+        if len(self.negative_tests) > 0:
             logger.info('running negative tests for debugging')
-        for test in negative:
+        for test in self.negative_tests:
             self.trace += test
             _, instrumented = self.run_test(self.frontend_src, test, trace=self.trace[test], check_instrumented=True)
             if not instrumented:
@@ -206,7 +213,7 @@ class Angelix:
         for test in excluded:
             if not self.config['mute_test_message']:
                 logger.warning('excluding test {} because it fails in golden version'.format(test))
-            negative.remove(test)
+            self.negative_tests.remove(test)
             if test in self.repair_test_suite:
                 self.repair_test_suite.remove(test)
             self.validation_test_suite.remove(test)
@@ -219,10 +226,96 @@ class Angelix:
         logger.info("repair test suite: {}".format(self.repair_test_suite))
         logger.info("validation test suite: {}".format(self.validation_test_suite))
 
-        positive_traces = [(test, self.trace.parse(test)) for test in positive]
-        negative_traces = [(test, self.trace.parse(test)) for test in negative]
-        suspicious = self.get_suspicious_groups(self.validation_test_suite, positive_traces, negative_traces)
+        self.positive_traces = [(test, self.trace.parse(test)) for test in self.positive_tests]
+        self.negative_traces = [(test, self.trace.parse(test)) for test in self.negative_tests]
+        suspicious = self.get_suspicious_groups(self.validation_test_suite,
+                                                self.positive_traces,
+                                                self.negative_traces)
 
+        return suspicious
+
+
+    def extract_constraint(self, expressions):
+        self.current_repair_suite = self.reduce(self.repair_test_suite,
+                                                self.positive_traces,
+                                                self.negative_traces,
+                                                expressions)
+
+        self.backend_src.restore_buggy()
+        self.backend_src.configure()
+        if config['build_before_instr']:
+            self.backend_src.build()
+        self.instrument_for_inference(self.backend_src, expressions)
+        self.backend_src.build()
+
+        angelic_forest = dict()
+        inference_failed = False
+        for test in self.current_repair_suite:
+            try:
+                angelic_forest[test] = self.infer_spec(self.backend_src, test, self.dump[test], self.frontend_src)
+                if len(angelic_forest[test]) == 0:
+                    if test in self.positive_tests:
+                        logger.warning('angelic forest for positive test {} not found'.format(test))
+                        self.current_repair_suite.remove(test)
+                        del angelic_forest[test]
+                        continue
+                    inference_failed = True
+                    break
+            except InferenceError:
+                logger.warning('inference failed (error was raised)')
+                inference_failed = True
+                break
+            except NoSmtError:
+                if test in self.positive_tests:
+                    self.current_repair_suite.remove(test)
+                    continue
+                inference_failed = True
+                break
+
+        return angelic_forest if not inference_failed else None
+
+
+    def validate_fix(self, fix):
+        self.validation_src.restore_buggy()
+        try:
+            self.apply_patch(self.validation_src, fix)
+        except TransformationError:
+            logger.info('cannot apply fix')
+            return None
+        self.validation_src.build()
+
+        pos, neg = self.evaluate(self.validation_src)
+        logger.info(('positive tests: {}, negative tests: {}'
+                    ).format(pos, neg))
+
+        if not set(neg).isdisjoint(set(self.current_repair_suite)):
+            not_repaired = list(set(self.current_repair_suite) & set(neg))
+            logger.warning("generated invalid fix (tests {} not repaired)".format(not_repaired))
+            return None
+
+        return (pos, neg)
+
+
+    def update_fix(self, fix, pos, neg):
+        if not neg:
+            self.fixes.append(fix)
+        elif ((self.partial_fix is None and (len(neg) < len(self.negative_tests)))
+              or (self.partial_fix and (len(neg) < len(self.partial_fix[1])))):
+            logger.info('Saving partial fix')
+            self.partial_fix = (fix, neg)
+
+
+    def generate_diff(self, fix):
+        self.validation_src.restore_buggy()
+        self.apply_patch(self.validation_src, fix)
+        self.validation_src.repair_buggy()
+        diff = self.validation_src.repair_diff()
+
+        return diff
+
+
+    def generate_patch(self):
+        suspicious = self.localize_faults()
         if self.config['localize_only']:
             #for idx, (group, score) in enumerate(suspicious):
             #    logger.info('group {}: {} ({})'.format(idx+1, group, score))
@@ -231,10 +324,7 @@ class Angelix:
         if len(suspicious) == 0:
             logger.warning('no suspicious expressions localized')
 
-        repaired = len(negative) == 0
-        
-        patches = []
-        partial_patch = None
+        repaired = len(self.negative_tests) == 0
 
         while (config['generate_all'] or not repaired) and len(suspicious) > 0:
             if self.config['use_semfix_syn']:
@@ -244,70 +334,25 @@ class Angelix:
 
             expressions = suspicious.pop(0)
             logger.info('considering suspicious expressions {}'.format(expressions))
-            current_repair_suite = self.reduce(self.repair_test_suite, positive_traces, negative_traces, expressions)
 
-            self.backend_src.restore_buggy()
-            self.backend_src.configure()
-            if config['build_before_instr']:
-                self.backend_src.build()
-            self.instrument_for_inference(self.backend_src, expressions)
-            self.backend_src.build()
-
-            angelic_forest = dict()
-            inference_failed = False
-            for test in current_repair_suite:
-                try:
-                    angelic_forest[test] = self.infer_spec(self.backend_src, test, self.dump[test], self.frontend_src)
-                    if len(angelic_forest[test]) == 0:
-                        if test in positive:
-                            logger.warning('angelic forest for positive test {} not found'.format(test))
-                            current_repair_suite.remove(test)
-                            del angelic_forest[test]
-                            continue
-                        inference_failed = True
-                        break
-                except InferenceError:
-                    logger.warning('inference failed (error was raised)')
-                    inference_failed = True
-                    break
-                except NoSmtError:
-                    if test in positive:
-                        current_repair_suite.remove(test)
-                        continue
-                    inference_failed = True
-                    break
-            if inference_failed:
+            angelic_forest = self.extract_constraint(expressions)
+            if angelic_forest is None:
                 continue
+
             initial_fix = self.synthesize_fix(angelic_forest)
             if initial_fix is None:
                 logger.info('cannot synthesize fix')
                 continue
             logger.info('candidate fix synthesized')
 
-            self.validation_src.restore_buggy()
-            try:
-                self.apply_patch(self.validation_src, initial_fix)
-            except TransformationError:
-                logger.info('cannot apply fix')
+            result = self.validate_fix(initial_fix)
+            if result is None:
                 continue
-            self.validation_src.build()
+            pos, neg = result
 
-            pos, neg = self.evaluate(self.validation_src)
-            logger.info(('positive tests: {}, negative tests: {}'
-                        ).format(pos, neg))
-            if not set(neg).isdisjoint(set(current_repair_suite)):
-                not_repaired = list(set(current_repair_suite) & set(neg))
-                logger.warning("generated invalid fix (tests {} not repaired)".format(not_repaired))
-                continue
+            self.update_fix(initial_fix, pos, neg)
+
             repaired = len(neg) == 0
-            if repaired:
-                self.validation_src.repair_buggy()
-                self.validation_src.build()
-                patches.append(self.validation_src.repair_diff())
-            elif ((partial_patch is None and (len(neg) < len(negative)))
-                  or (partial_patch and (len(neg) < len(partial_patch[1])))):
-                logger.info('Saving fix as partial patch')
-                partial_patch = (initial_fix, neg)
             neg = list(set(neg) & set(self.repair_test_suite))
             current_positive, current_negative = pos, neg
 
@@ -320,7 +365,7 @@ class Angelix:
                 counterexample = current_negative[negative_idx]
 
                 logger.info('counterexample test is {}'.format(counterexample))
-                current_repair_suite.append(counterexample)
+                self.current_repair_suite.append(counterexample)
                 try:
                     angelic_forest[counterexample] = self.infer_spec(self.backend_src,
                                                                      counterexample,
@@ -339,38 +384,26 @@ class Angelix:
                     logger.info('cannot refine fix')
                     break
                 logger.info('refined fix is synthesized')
-                self.validation_src.restore_buggy()
-                self.apply_patch(self.validation_src, fix)
-                self.validation_src.build()
-                pos, neg = self.evaluate(self.validation_src)
-                logger.info(('positive tests: {}, negative tests: {}'
-                            ).format(pos, neg))
+
+                result = self.validate_fix(fix)
+                if result is None:
+                    break
+                pos, neg = result
+
+                self.update_fix(fix, pos, neg)
+
                 repaired = len(neg) == 0
-                if repaired:
-                    self.validation_src.repair_buggy()
-                    self.validation_src.build()
-                    patches.append(self.validation_src.repair_diff())
-                elif ((partial_patch is None and (len(neg) < len(negative)))
-                      or (partial_patch and (len(neg) < len(partial_patch[1])))):
-                    logger.info('Saving fix as partial patch')
-                    partial_patch = (fix, neg)
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
 
-                if not set(current_negative).isdisjoint(set(current_repair_suite)):
-                    not_repaired = list(set(current_repair_suite) & set(current_negative))
-                    logger.warning("generated invalid fix (tests {} not repaired)".format(not_repaired))
-                    break
                 negative_idx = 0
 
-        if repaired:
-            partial_patch = None
-        elif partial_patch:
-            self.validation_src.restore_buggy()
-            self.apply_patch(self.validation_src, partial_patch[0])
-            self.validation_src.repair_buggy()
-            self.validation_src.build()
-            partial_patch = self.validation_src.repair_diff()
+        patches = []
+        partial_patch = None
+        if self.fixes:
+            patches = [self.generate_diff(x) for x in self.fixes]
+        elif self.partial_fix:
+            partial_patch = self.generate_diff(self.partial_fix[0])
 
         return patches, partial_patch
 
