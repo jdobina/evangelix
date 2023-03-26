@@ -156,6 +156,8 @@ class Angelix:
 
     def generate_patch(self):
         positive, negative = self.evaluate(self.validation_src)
+        logger.info(('positive tests: {}, negative tests: {}'
+                    ).format(positive, negative))
 
         self.frontend_src.configure()
         if config['build_before_instr']:
@@ -232,6 +234,7 @@ class Angelix:
         repaired = len(negative) == 0
         
         patches = []
+        partial_patch = None
 
         while (config['generate_all'] or not repaired) and len(suspicious) > 0:
             if self.config['use_semfix_syn']:
@@ -290,6 +293,8 @@ class Angelix:
             self.validation_src.build()
 
             pos, neg = self.evaluate(self.validation_src)
+            logger.info(('positive tests: {}, negative tests: {}'
+                        ).format(pos, neg))
             if not set(neg).isdisjoint(set(current_repair_suite)):
                 not_repaired = list(set(current_repair_suite) & set(neg))
                 logger.warning("generated invalid fix (tests {} not repaired)".format(not_repaired))
@@ -299,6 +304,10 @@ class Angelix:
                 self.validation_src.repair_buggy()
                 self.validation_src.build()
                 patches.append(self.validation_src.repair_diff())
+            elif ((partial_patch is None and (len(neg) < len(negative)))
+                  or (partial_patch and (len(neg) < len(partial_patch[1])))):
+                logger.info('Saving fix as partial patch')
+                partial_patch = (initial_fix, neg)
             neg = list(set(neg) & set(self.repair_test_suite))
             current_positive, current_negative = pos, neg
 
@@ -334,11 +343,17 @@ class Angelix:
                 self.apply_patch(self.validation_src, fix)
                 self.validation_src.build()
                 pos, neg = self.evaluate(self.validation_src)
+                logger.info(('positive tests: {}, negative tests: {}'
+                            ).format(pos, neg))
                 repaired = len(neg) == 0
                 if repaired:
                     self.validation_src.repair_buggy()
                     self.validation_src.build()
                     patches.append(self.validation_src.repair_diff())
+                elif ((partial_patch is None and (len(neg) < len(negative)))
+                      or (partial_patch and (len(neg) < len(partial_patch[1])))):
+                    logger.info('Saving fix as partial patch')
+                    partial_patch = (fix, neg)
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
 
@@ -347,8 +362,17 @@ class Angelix:
                     logger.warning("generated invalid fix (tests {} not repaired)".format(not_repaired))
                     break
                 negative_idx = 0
-                
-        return patches
+
+        if repaired:
+            partial_patch = None
+        elif partial_patch:
+            self.validation_src.restore_buggy()
+            self.apply_patch(self.validation_src, partial_patch[0])
+            self.validation_src.repair_buggy()
+            self.validation_src.build()
+            partial_patch = self.validation_src.repair_diff()
+
+        return patches, partial_patch
 
     def dump_outputs(self):
         self.frontend_src.configure()
@@ -679,9 +703,9 @@ if __name__ == "__main__":
     try:
         if args.timeout is not None:
             with time_limit(args.timeout):
-                patches = repair()
+                patches, partial_patch = repair()
         else:
-            patches = repair()
+            patches, partial_patch = repair()
     except TimeoutException:
         logger.info("failed to generate patch (timeout)")
         print('TIMEOUT')
@@ -696,11 +720,7 @@ if __name__ == "__main__":
     statistics.data['time']['total'] = end - start
     statistics.save()
 
-    if not patches:
-        logger.info("no patch generated in {}".format(elapsed))
-        print('FAIL')
-        exit(0)
-    else:
+    if patches:
         if config['generate_all']:
             patch_dir = basename(abspath(args.src)) + '-' + time.strftime("%Y-%b%d-%H%M%S")
             if not exists(patch_dir):
@@ -718,4 +738,16 @@ if __name__ == "__main__":
                 for line in patches[0]:
                     file.write(line)
         print('SUCCESS')
+        exit(0)
+    elif partial_patch:
+        patch_file = basename(abspath(args.src)) + '-' + time.strftime("%Y-%b%d-%H%M%S") + '.patch' + '.partial'
+        logger.info("partial patch successfully generated in {} (see {})".format(elapsed, patch_file))
+        with open(patch_file, 'w+') as file:
+            for line in partial_patch:
+                file.write(line)
+        print('SUCCESS')
+        exit(0)
+    else:
+        logger.info("no patch generated in {}".format(elapsed))
+        print('FAIL')
         exit(0)
