@@ -52,11 +52,17 @@ class Project:
             self.instrument_printf = PrintfTransformer(self.config)
             self.instrument_printf(self, self.config['instr_printf'])
 
+        self._repairable_with_instr_buggy = self.buggy + '.repairable_with_instr'
+        shutil.copyfile(self.buggy, self._repairable_with_instr_buggy)
+
         self._buggy_backup = self.buggy + '.backup'
         shutil.copyfile(self.buggy, self._buggy_backup)
 
     def restore_buggy(self):
         shutil.copyfile(self._buggy_backup, self.buggy)
+
+    def update_buggy(self):
+        shutil.copyfile(self.buggy, self._buggy_backup)
 
     def repair_buggy(self):
         repaired_with_instr_buggy = self.buggy + '.repaired_with_instr'
@@ -77,7 +83,7 @@ class Project:
                               stderr=subprocess.DEVNULL)
 
         repair_with_instr_diff = join(self.dir, 'repair_with_instr.diff')
-        rc = subprocess.call('diff {} {} > {}'.format(self._buggy_backup,
+        rc = subprocess.call('diff {} {} > {}'.format(self._repairable_with_instr_buggy,
                                                       repaired_with_instr_buggy,
                                                       repair_with_instr_diff),
                              shell=True)

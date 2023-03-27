@@ -71,15 +71,7 @@ class Angelix:
     def __init__(self, working_dir, src, buggy, oracle, tests, golden, asserts, lines, build, configure, config):
         self.working_dir = working_dir
         self.config = config
-        self.repair_test_suite = tests[:]
-        self.validation_test_suite = tests[:]
-        self.current_repair_suite = []
-        self.positive_tests = []
-        self.negative_tests = []
-        self.positive_traces = []
-        self.negative_traces = []
-        self.fixes = []
-        self.partial_fix = None
+        self.tests = tests[:]
         extracted = join(working_dir, 'extracted')
         os.mkdir(extracted)
 
@@ -314,98 +306,133 @@ class Angelix:
         return diff
 
 
+    def init_repair(self):
+        self.repair_test_suite = self.tests[:]
+        self.validation_test_suite = self.tests[:]
+        self.current_repair_suite = []
+        self.positive_tests = []
+        self.negative_tests = []
+        self.positive_traces = []
+        self.negative_traces = []
+        self.fixes = []
+        self.partial_fix = None
+
+
+    def patch_srcs(self, patch):
+        srcs = [
+            self.validation_src,
+            self.frontend_src,
+            self.backend_src
+        ]
+
+        for src in srcs:
+            src.restore_buggy()
+            self.apply_patch(src, patch)
+            src.update_buggy()
+
+
     def generate_patch(self):
-        suspicious = self.localize_faults()
-        if self.config['localize_only']:
-            #for idx, (group, score) in enumerate(suspicious):
-            #    logger.info('group {}: {} ({})'.format(idx+1, group, score))
-            exit(0)
+        patches = []
+        partial_patch = None
 
-        if len(suspicious) == 0:
-            logger.warning('no suspicious expressions localized')
+        while True:
+            self.init_repair()
 
-        repaired = len(self.negative_tests) == 0
+            suspicious = self.localize_faults()
+            if self.config['localize_only']:
+                #for idx, (group, score) in enumerate(suspicious):
+                #    logger.info('group {}: {} ({})'.format(idx+1, group, score))
+                exit(0)
 
-        while (config['generate_all'] or not repaired) and len(suspicious) > 0:
-            if self.config['use_semfix_syn']:
-                # prepare a clean directory
-                shutil.rmtree(join(self.working_dir, 'semfix-syn-input'),
-                              ignore_errors='true')
+            if len(suspicious) == 0:
+                logger.warning('no suspicious expressions localized')
 
-            expressions = suspicious.pop(0)
-            logger.info('considering suspicious expressions {}'.format(expressions))
+            repaired = len(self.negative_tests) == 0
 
-            angelic_forest = self.extract_constraint(expressions)
-            if angelic_forest is None:
-                continue
+            while (config['generate_all'] or not repaired) and len(suspicious) > 0:
+                if self.config['use_semfix_syn']:
+                    # prepare a clean directory
+                    shutil.rmtree(join(self.working_dir, 'semfix-syn-input'),
+                                  ignore_errors='true')
 
-            initial_fix = self.synthesize_fix(angelic_forest)
-            if initial_fix is None:
-                logger.info('cannot synthesize fix')
-                continue
-            logger.info('candidate fix synthesized')
+                expressions = suspicious.pop(0)
+                logger.info('considering suspicious expressions {}'.format(expressions))
 
-            result = self.validate_fix(initial_fix)
-            if result is None:
-                continue
-            pos, neg = result
+                angelic_forest = self.extract_constraint(expressions)
+                if angelic_forest is None:
+                    continue
 
-            self.update_fix(initial_fix, pos, neg)
+                initial_fix = self.synthesize_fix(angelic_forest)
+                if initial_fix is None:
+                    logger.info('cannot synthesize fix')
+                    continue
+                logger.info('candidate fix synthesized')
 
-            repaired = len(neg) == 0
-            neg = list(set(neg) & set(self.repair_test_suite))
-            current_positive, current_negative = pos, neg
-
-            if len(current_negative) == 0 and not repaired:
-                logger.warning("cannot repair using instrumented tests")
-                continue
-
-            negative_idx = 0
-            while not repaired:
-                counterexample = current_negative[negative_idx]
-
-                logger.info('counterexample test is {}'.format(counterexample))
-                self.current_repair_suite.append(counterexample)
-                try:
-                    angelic_forest[counterexample] = self.infer_spec(self.backend_src,
-                                                                     counterexample,
-                                                                     self.dump[counterexample],
-                                                                     self.frontend_src)
-                except NoSmtError:
-                    logger.warning("no smt file for test {}".format(counterexample))
-                    negative_idx = negative_idx + 1
-                    if len(current_negative) - negative_idx > 0:
-                        continue
-                    break
-                if len(angelic_forest[counterexample]) == 0:
-                    break
-                fix = self.synthesize_fix(angelic_forest)
-                if fix is None:
-                    logger.info('cannot refine fix')
-                    break
-                logger.info('refined fix is synthesized')
-
-                result = self.validate_fix(fix)
+                result = self.validate_fix(initial_fix)
                 if result is None:
-                    break
+                    continue
                 pos, neg = result
 
-                self.update_fix(fix, pos, neg)
+                self.update_fix(initial_fix, pos, neg)
 
                 repaired = len(neg) == 0
                 neg = list(set(neg) & set(self.repair_test_suite))
                 current_positive, current_negative = pos, neg
 
-                negative_idx = 0
+                if len(current_negative) == 0 and not repaired:
+                    logger.warning("cannot repair using instrumented tests")
+                    continue
 
-        patches = []
-        partial_patch = None
+                negative_idx = 0
+                while not repaired:
+                    counterexample = current_negative[negative_idx]
+
+                    logger.info('counterexample test is {}'.format(counterexample))
+                    self.current_repair_suite.append(counterexample)
+                    try:
+                        angelic_forest[counterexample] = self.infer_spec(self.backend_src,
+                                                                         counterexample,
+                                                                         self.dump[counterexample],
+                                                                         self.frontend_src)
+                    except NoSmtError:
+                        logger.warning("no smt file for test {}".format(counterexample))
+                        negative_idx = negative_idx + 1
+                        if len(current_negative) - negative_idx > 0:
+                            continue
+                        break
+                    if len(angelic_forest[counterexample]) == 0:
+                        break
+                    fix = self.synthesize_fix(angelic_forest)
+                    if fix is None:
+                        logger.info('cannot refine fix')
+                        break
+                    logger.info('refined fix is synthesized')
+
+                    result = self.validate_fix(fix)
+                    if result is None:
+                        break
+                    pos, neg = result
+
+                    self.update_fix(fix, pos, neg)
+
+                    repaired = len(neg) == 0
+                    neg = list(set(neg) & set(self.repair_test_suite))
+                    current_positive, current_negative = pos, neg
+
+                    negative_idx = 0
+
+            if self.fixes or self.partial_fix is None:
+                break
+
+            partial_patch = self.generate_diff(self.partial_fix[0])
+            logger.info('patching sources')
+            self.patch_srcs(self.partial_fix[0])
+
         if self.fixes:
             patches = [self.generate_diff(x) for x in self.fixes]
-        elif self.partial_fix:
-            partial_patch = self.generate_diff(self.partial_fix[0])
 
         return patches, partial_patch
+
 
     def dump_outputs(self):
         self.frontend_src.configure()
