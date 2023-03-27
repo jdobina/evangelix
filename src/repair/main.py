@@ -292,9 +292,9 @@ class Angelix:
         if not neg:
             self.fixes.append(fix)
         elif ((self.partial_fix is None and (len(neg) < len(self.negative_tests)))
-              or (self.partial_fix and (len(neg) < len(self.partial_fix[1])))):
+              or (self.partial_fix and (len(neg) < len(self.partial_fix[2])))):
             logger.info('Saving partial fix')
-            self.partial_fix = (fix, neg)
+            self.partial_fix = (fix, pos, neg)
 
 
     def generate_diff(self, fix):
@@ -424,7 +424,9 @@ class Angelix:
             if self.fixes or self.partial_fix is None:
                 break
 
-            partial_patch = self.generate_diff(self.partial_fix[0])
+            partial_patch = (self.generate_diff(self.partial_fix[0]),
+                             self.partial_fix[1],
+                             self.partial_fix[2])
             logger.info('patching sources')
             self.patch_srcs(self.partial_fix[0])
 
@@ -802,8 +804,10 @@ if __name__ == "__main__":
     elif partial_patch:
         patch_file = basename(abspath(args.src)) + '-' + time.strftime("%Y-%b%d-%H%M%S") + '.patch' + '.partial'
         logger.info("partial patch successfully generated in {} (see {})".format(elapsed, patch_file))
+        logger.info(('positive tests: {}, negative tests: {}'
+                    ).format(partial_patch[1], partial_patch[2]))
         with open(patch_file, 'w+') as file:
-            for line in partial_patch:
+            for line in partial_patch[0]:
                 file.write(line)
         print('SUCCESS')
         exit(0)
