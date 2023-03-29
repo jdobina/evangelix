@@ -61,8 +61,22 @@ class Project:
     def restore_buggy(self):
         shutil.copyfile(self._buggy_backup, self.buggy)
 
+    def restore_old_buggy(self):
+        shutil.copyfile(self._old_buggy_backup, self._buggy_backup)
+        shutil.copyfile(self._buggy_backup, self.buggy)
+
     def update_buggy(self):
+        self._old_buggy_backup = self._buggy_backup + '.old'
+        shutil.copyfile(self._buggy_backup, self._old_buggy_backup)
         shutil.copyfile(self.buggy, self._buggy_backup)
+
+    def transform_buggy(self, defect):
+        if self.make_repairable(self, defect):
+            transform = diff(self._buggy_backup, self.buggy)
+            if len(list(transform)) != 0:
+                return transform
+
+        return None
 
     def repair_buggy(self):
         repaired_with_instr_buggy = self.buggy + '.repaired_with_instr'
@@ -98,6 +112,17 @@ class Project:
 
     def repair_diff(self):
         return diff(self._orig_buggy, self.buggy)
+
+    def apply_diff(self, diff_):
+        buggy_diff = self.buggy + '.diff'
+        with open(buggy_diff, 'w+') as file:
+            file.writelines(diff_)
+
+        subprocess.check_call('patch -z .pbak {} {}'.format(self.buggy,
+                                                            buggy_diff),
+                              shell=True,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
 
     def import_compilation_db(self, compilation_db):
         compilation_db = copy.deepcopy(compilation_db)
