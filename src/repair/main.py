@@ -52,6 +52,9 @@ DEFECT_CLASSES = ['if-conditions',
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']
 
 
+TRANSFORM_DEFECTS = ['missing-returns']
+
+
 KLEE_SEARCH_STRATEGIES = ['dfs', 'bfs', 'random-state', 'random-path',
                           'nurs:covnew', 'nurs:md2u', 'nurs:depth',
                           'nurs:icnt', 'nurs:cpicnt', 'nurs:qc']
@@ -318,7 +321,7 @@ class Angelix:
         self.partial_fix = None
 
 
-    def patch_srcs(self, patch):
+    def patch_srcs(self, diff):
         srcs = [
             self.validation_src,
             self.frontend_src,
@@ -327,13 +330,15 @@ class Angelix:
 
         for src in srcs:
             src.restore_buggy()
-            self.apply_patch(src, patch)
+            src.apply_diff(diff)
             src.update_buggy()
 
 
     def generate_patch(self):
         patches = []
         partial_patch = None
+        transform_defects = TRANSFORM_DEFECTS.copy()
+        transform_defect = None
 
         while True:
             self.init_repair()
@@ -421,14 +426,46 @@ class Angelix:
 
                     negative_idx = 0
 
-            if self.fixes or self.partial_fix is None:
+            if self.fixes:
+                break
+            elif self.partial_fix:
+                partial_patch = (self.generate_diff(self.partial_fix[0]),
+                                 self.partial_fix[1],
+                                 self.partial_fix[2])
+                logger.info('patching sources')
+                self.patch_srcs(partial_patch[0])
+                if transform_defect:
+                    transform_defects = TRANSFORM_DEFECTS.copy()
+                    transform_defect = None
+                continue
+            elif transform_defect:
+                logger.info('reverting {} transform'.format(transform_defect))
+                self.validation_src.restore_old_buggy()
+                self.frontend_src.restore_old_buggy()
+                self.backend_src.restore_old_buggy()
+                transform_defects.remove(transform_defect)
+                transform_defect = None
+
+            remove_tds = []
+            for td in transform_defects:
+                if not td in self.config['defect']:
+                    remove_tds.append(td)
+                    continue
+                logger.info('applying \'{}\' transform'.format(td))
+                self.validation_src.restore_buggy()
+                transform = self.validation_src.transform_buggy(td)
+                if transform is not None:
+                    self.patch_srcs(transform)
+                    transform_defect = td
+                    logger.info('applied \'{}\' transform'.format(td))
+                    break
+                remove_tds.append(td)
+                logger.info('unable to apply \'{}\' transform'.format(td))
+            else:
                 break
 
-            partial_patch = (self.generate_diff(self.partial_fix[0]),
-                             self.partial_fix[1],
-                             self.partial_fix[2])
-            logger.info('patching sources')
-            self.patch_srcs(self.partial_fix[0])
+            for td in remove_tds:
+                transform_defects.remove(td)
 
         if self.fixes:
             patches = [self.generate_diff(x) for x in self.fixes]

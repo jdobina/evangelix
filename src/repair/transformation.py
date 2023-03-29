@@ -24,12 +24,14 @@ class BuggyTransformer:
         else:
             self.subproc_output = subprocess.DEVNULL
 
-    def __call__(self, project):
+    def __call__(self, project, defect):
         src = basename(project.dir)
         logger.info('making {} source repairable'.format(src))
         environment = dict(os.environ)
-        if 'missing-returns' in self.config['defect']:
+        if defect == 'missing-returns':
             environment['ANGELIX_MISSING_RETURNS_DEFECT_CLASS'] = 'YES'
+        else:
+            return False
         with cd(project.dir):
             return_code = subprocess.call(['make-repairable', project.buggy],
                                           stderr=self.subproc_output,
@@ -41,6 +43,8 @@ class BuggyTransformer:
             else:
                 logger.error("transformation of {} failed".format(relpath(project.dir)))
                 raise TransformationError()
+
+        return True
 
 
 class RepairableTransformer:
