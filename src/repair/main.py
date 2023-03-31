@@ -46,13 +46,17 @@ DEFECT_CLASSES = ['if-conditions',
                   'loop-conditions',
                   'guards',
                   'return-values',
-                  'missing-returns']
+                  'missing-returns',
+                  'if-to-elseifs']
 
 
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']
 
 
-TRANSFORM_DEFECTS = ['missing-returns']
+TRANSFORM_DEFECTS = [
+    'if-to-elseifs',
+    'missing-returns'
+]
 
 
 KLEE_SEARCH_STRATEGIES = ['dfs', 'bfs', 'random-state', 'random-path',

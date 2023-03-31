@@ -46,11 +46,53 @@ private:
 };
 
 
+class IfToElseIfHandler : public MatchFinder::MatchCallback {
+public:
+  IfToElseIfHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const IfStmt *ifS = Result.Nodes.getNodeAs<clang::IfStmt>("repairable")) {
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(ifS, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(ifS, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(ifS) << "\n";
+
+      std::ostringstream stringStream;
+      stringStream << "else ";
+      std::string insertion = stringStream.str();
+
+      Rewrite.InsertTextBefore(ifS->getLocStart(), insertion);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R) : HandlerForMissingReturns(R) {
+  MyASTConsumer(Rewriter &R) : HandlerForMissingReturns(R),
+                               HandlerForIfToElseIfs(R) {
     if (getenv("ANGELIX_MISSING_RETURNS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableMissingReturn, &HandlerForMissingReturns);
+    if (getenv("ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS"))
+      Matcher.addMatcher(RepairableIfToElseIf, &HandlerForIfToElseIfs);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -59,6 +101,7 @@ public:
 
 private:
   MissingReturnHandler HandlerForMissingReturns;
+  IfToElseIfHandler HandlerForIfToElseIfs;
   MatchFinder Matcher;
 };
 

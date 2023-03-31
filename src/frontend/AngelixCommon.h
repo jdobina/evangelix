@@ -252,6 +252,17 @@ StatementMatcher RepairableMissingReturn =
         ).bind("repairable");
 
 
+StatementMatcher RepairableIfToElseIf =
+  compoundStmt(hasDescendant(ifStmt(hasThen(anything()),
+                                    unless(hasElse(anything()))
+                                   ).bind("x")
+                            ),
+               hasDescendant(ifStmt(unless(equalsBoundNode("x"))
+                                   ).bind("repairable")
+                            )
+              );
+
+
 //TODO: currently these selectors are not completely orthogonal
 // for example, if RHS of assignment contains if condition like here:
 // x = ({ if (...) {...}; 1; });
