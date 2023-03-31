@@ -308,10 +308,17 @@ class Angelix:
             self.partial_fix = (fix, pos, neg)
 
 
-    def generate_diff(self, fix):
+    def fix_to_diff(self, fix):
         self.validation_src.restore_buggy()
         self.apply_patch(self.validation_src, fix)
-        self.validation_src.repair_buggy()
+        diff = self.validation_src.buggy_diff()
+
+        return diff
+
+
+    def fix_to_repair_diff(self, fix):
+        self.validation_src.restore_buggy()
+        self.apply_patch(self.validation_src, fix)
         diff = self.validation_src.repair_diff()
 
         return diff
@@ -440,11 +447,11 @@ class Angelix:
             if repaired:
                 break
             elif self.partial_fix:
-                partial_patch = (self.generate_diff(self.partial_fix[0]),
+                partial_patch = (self.fix_to_repair_diff(self.partial_fix[0]),
                                  self.partial_fix[1],
                                  self.partial_fix[2])
                 logger.info('patching sources')
-                self.patch_srcs(partial_patch[0])
+                self.patch_srcs(self.fix_to_diff(self.partial_fix[0]))
                 if transform_defect:
                     transform_defects = TRANSFORM_DEFECTS.copy()
                     transform_defect = None
@@ -474,7 +481,7 @@ class Angelix:
                                 ).format(pos, neg))
                     repaired = len(neg) == 0
                     if repaired:
-                        patches.append(transform)
+                        patches.append(self.validation_src.repair_diff())
                         break
 
                     logger.info('patching sources')
@@ -494,7 +501,7 @@ class Angelix:
                 transform_defects.remove(td)
 
         if self.fixes:
-            patches += [self.generate_diff(x) for x in self.fixes]
+            patches += [self.fix_to_repair_diff(x) for x in self.fixes]
 
         return patches, partial_patch
 
@@ -553,8 +560,6 @@ class Angelix:
             logger.info("tests {} fail".format(negative))
             return []
         else:
-            self.validation_src.repair_buggy()
-            self.validation_src.build()
             return [self.validation_src.repair_diff()]
 
 

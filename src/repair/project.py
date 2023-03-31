@@ -73,7 +73,10 @@ class Project:
 
         return None
 
-    def repair_buggy(self):
+    def buggy_diff(self):
+        return list(diff(self._buggy_backup, self.buggy))
+
+    def repair_diff(self):
         repaired_with_instr_buggy = self.buggy + '.repaired_with_instr'
         shutil.copyfile(self.buggy, repaired_with_instr_buggy)
 
@@ -93,7 +96,6 @@ class Project:
 
         self.tidy(self)
 
-    def repair_diff(self):
         return list(diff(self._orig_buggy, self.buggy))
 
     def apply_diff(self, diff_):
