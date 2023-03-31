@@ -161,6 +161,7 @@ class Angelix:
 
 
     def localize_faults(self):
+        self.validation_src.build()
         self.positive_tests, self.negative_tests = self.evaluate(self.validation_src)
         logger.info(('positive tests: {}, negative tests: {}'
                     ).format(self.positive_tests, self.negative_tests))
