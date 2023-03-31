@@ -165,6 +165,9 @@ class Angelix:
         self.positive_tests, self.negative_tests = self.evaluate(self.validation_src)
         logger.info(('positive tests: {}, negative tests: {}'
                     ).format(self.positive_tests, self.negative_tests))
+        if len(self.negative_tests) == 0:
+            logger.info("No negative test exists")
+            exit(0)
 
         self.frontend_src.configure()
         if config['build_before_instr']:
@@ -431,7 +434,10 @@ class Angelix:
 
                     negative_idx = 0
 
-            if self.fixes:
+            if config['generate_all']:
+                repaired = len(self.fixes) != 0
+
+            if repaired:
                 break
             elif self.partial_fix:
                 partial_patch = (self.generate_diff(self.partial_fix[0]),
@@ -456,24 +462,39 @@ class Angelix:
                 if not td in self.config['defect']:
                     remove_tds.append(td)
                     continue
+
                 logger.info('applying \'{}\' transform'.format(td))
                 self.validation_src.restore_buggy()
                 transform = self.validation_src.transform_buggy(td)
                 if transform is not None:
+                    logger.info('applied \'{}\' transform'.format(td))
+                    self.validation_src.build()
+                    pos, neg = self.evaluate(self.validation_src)
+                    logger.info(('positive tests: {}, negative tests: {}'
+                                ).format(pos, neg))
+                    repaired = len(neg) == 0
+                    if repaired:
+                        patches.append(transform)
+                        break
+
+                    logger.info('patching sources')
                     self.patch_srcs(transform)
                     transform_defect = td
-                    logger.info('applied \'{}\' transform'.format(td))
                     break
+
                 remove_tds.append(td)
                 logger.info('unable to apply \'{}\' transform'.format(td))
             else:
+                break
+
+            if repaired:
                 break
 
             for td in remove_tds:
                 transform_defects.remove(td)
 
         if self.fixes:
-            patches = [self.generate_diff(x) for x in self.fixes]
+            patches += [self.generate_diff(x) for x in self.fixes]
 
         return patches, partial_patch
 
