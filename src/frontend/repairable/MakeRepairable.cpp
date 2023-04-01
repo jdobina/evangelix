@@ -4,6 +4,42 @@
 #include "../AngelixCommon.h"
 
 
+bool insideSuspiciousScope(const clang::Stmt* expr, ASTContext* context, SourceManager &srcMgr) {
+  static char *suspicious_line_env = getenv("ANGELIX_SUSPICIOUS_LINE");
+  if (!suspicious_line_env) {
+    std::cerr << "ANGELIX_SUSPICIOUS_LINE env variable not found\n";
+    return false;
+  }
+  unsigned suspicious_line = atoi(suspicious_line_env);
+
+  ArrayRef<ast_type_traits::DynTypedNode> parents = context->getParents(*expr);
+  if (parents.size() > 0) {
+    const ast_type_traits::DynTypedNode parentNode = *(parents.begin());
+    const CompoundStmt *parent = parentNode.get<CompoundStmt>();
+    if (!parent)
+      return false;
+
+    SourceRange expandedLoc = getExpandedLoc(parent, srcMgr);
+    std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+    if (srcMgr.getMainFileID() != decLoc.first)
+      return false;
+
+    unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+    unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+    unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+    unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+    std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+              << toString(parent) << "\n";
+
+    if ((suspicious_line >= beginLine) && (suspicious_line <= endLine))
+      return true;
+  }
+
+  return false;
+}
+
+
 class MissingReturnHandler : public MatchFinder::MatchCallback {
 public:
   MissingReturnHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
@@ -21,6 +57,9 @@ public:
 
       std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
       if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      if (!insideSuspiciousScope(then, Result.Context, srcMgr))
         return;
 
       unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
@@ -62,6 +101,9 @@ public:
 
       std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
       if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      if (!insideSuspiciousScope(ifS, Result.Context, srcMgr))
         return;
 
       unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());

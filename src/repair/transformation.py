@@ -24,7 +24,7 @@ class BuggyTransformer:
         else:
             self.subproc_output = subprocess.DEVNULL
 
-    def __call__(self, project, defect):
+    def __call__(self, project, defect, suspicious_line):
         src = basename(project.dir)
         logger.info('making {} source repairable'.format(src))
         environment = dict(os.environ)
@@ -34,6 +34,7 @@ class BuggyTransformer:
             environment['ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS'] = 'YES'
         else:
             return False
+        environment['ANGELIX_SUSPICIOUS_LINE'] = str(suspicious_line)
         with cd(project.dir):
             return_code = subprocess.call(['make-repairable', project.buggy],
                                           stderr=self.subproc_output,

@@ -365,9 +365,11 @@ class Angelix:
                 exit(0)
 
             if len(suspicious) == 0:
-                logger.warning('no suspicious expressions localized')
+                logger.error('no suspicious expressions localized')
+                exit(0)
 
             repaired = len(self.negative_tests) == 0
+            top_suspicious_line = suspicious[0][0][0]
 
             while (config['generate_all'] or not repaired) and len(suspicious) > 0:
                 if self.config['use_semfix_syn']:
@@ -472,7 +474,7 @@ class Angelix:
 
                 logger.info('applying \'{}\' transform'.format(td))
                 self.validation_src.restore_buggy()
-                transform = self.validation_src.transform_buggy(td)
+                transform = self.validation_src.transform_buggy(td, top_suspicious_line)
                 if transform is not None:
                     logger.info('applied \'{}\' transform'.format(td))
                     self.validation_src.build()

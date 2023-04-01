@@ -65,8 +65,8 @@ class Project:
         shutil.copyfile(self._buggy_backup, self._old_buggy_backup)
         shutil.copyfile(self.buggy, self._buggy_backup)
 
-    def transform_buggy(self, defect):
-        if self.make_repairable(self, defect):
+    def transform_buggy(self, defect, suspicious_line):
+        if self.make_repairable(self, defect, suspicious_line):
             transform = list(diff(self._buggy_backup, self.buggy))
             if len(transform) != 0:
                 return transform
