@@ -30,8 +30,10 @@ class BuggyTransformer:
         environment = dict(os.environ)
         if defect == 'missing-returns':
             environment['ANGELIX_MISSING_RETURNS_DEFECT_CLASS'] = 'YES'
-        if defect == 'if-to-elseifs':
+        elif defect == 'if-to-elseifs':
             environment['ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS'] = 'YES'
+        elif defect == 'uninit-vars':
+            environment['ANGELIX_UNINIT_VARS_DEFECT_CLASS'] = 'YES'
         else:
             return False
         environment['ANGELIX_SUSPICIOUS_LINE'] = str(suspicious_line)

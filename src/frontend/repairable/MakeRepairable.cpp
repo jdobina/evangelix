@@ -127,14 +127,72 @@ private:
 };
 
 
+class UninitVarHandler : public MatchFinder::MatchCallback {
+public:
+  UninitVarHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const DeclStmt *declS = Result.Nodes.getNodeAs<clang::DeclStmt>("repairable")) {
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(declS, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(declS, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      if (!insideSuspiciousScope(declS, Result.Context, srcMgr))
+        return;
+
+      if (!declS->isSingleDecl())
+        return;
+
+      const Decl *d = declS->getSingleDecl();
+      if (!isa<VarDecl>(d))
+        return;
+
+      const VarDecl *vd = cast<VarDecl>(d);
+      if (!vd->getType().getTypePtr()->isIntegerType())
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(declS) << "\n";
+
+      std::ostringstream stringStream;
+      stringStream << vd->getType().getAsString() << " "
+                   << vd->getNameAsString()
+                   << " = 0;";
+      std::string replacement = stringStream.str();
+
+      Rewrite.ReplaceText(expandedLoc, replacement);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R) : HandlerForMissingReturns(R),
-                               HandlerForIfToElseIfs(R) {
+                               HandlerForIfToElseIfs(R),
+                               HandlerForUninitVars(R) {
     if (getenv("ANGELIX_MISSING_RETURNS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableMissingReturn, &HandlerForMissingReturns);
     if (getenv("ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableIfToElseIf, &HandlerForIfToElseIfs);
+    if (getenv("ANGELIX_UNINIT_VARS_DEFECT_CLASS"))
+      Matcher.addMatcher(RepairableUninitVar, &HandlerForUninitVars);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -144,6 +202,7 @@ public:
 private:
   MissingReturnHandler HandlerForMissingReturns;
   IfToElseIfHandler HandlerForIfToElseIfs;
+  UninitVarHandler HandlerForUninitVars;
   MatchFinder Matcher;
 };
 

@@ -47,13 +47,15 @@ DEFECT_CLASSES = ['if-conditions',
                   'guards',
                   'return-values',
                   'missing-returns',
-                  'if-to-elseifs']
+                  'if-to-elseifs',
+                  'uninit-vars']
 
 
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']
 
 
 TRANSFORM_DEFECTS = [
+    'uninit-vars',
     'if-to-elseifs',
     'missing-returns'
 ]
