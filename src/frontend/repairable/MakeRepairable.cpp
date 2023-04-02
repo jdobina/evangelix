@@ -226,12 +226,59 @@ private:
 };
 
 
+class MissingLoopContinueHandler : public MatchFinder::MatchCallback {
+public:
+  MissingLoopContinueHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const CompoundStmt *stmt = Result.Nodes.getNodeAs<clang::CompoundStmt>("repairable")) {
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(stmt, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(stmt, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      if (!insideSuspiciousScope(stmt, Result.Context, srcMgr))
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(stmt) << "\n";
+
+      std::ostringstream stringStream;
+      stringStream << "\n"
+                   << "    "
+                   << "if (0) continue;"
+                   << "\n";
+      std::string insertion = stringStream.str();
+
+      Rewrite.InsertText(stmt->getLocStart().getLocWithOffset(1),
+                         insertion, true, true);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R) : HandlerForMissingReturns(R),
                                HandlerForIfToElseIfs(R),
                                HandlerForUninitVars(R),
-                               HandlerForMissingLoopBreaks(R) {
+                               HandlerForMissingLoopBreaks(R),
+                               HandlerForMissingLoopContinues(R) {
     if (getenv("ANGELIX_MISSING_RETURNS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableMissingReturn, &HandlerForMissingReturns);
     if (getenv("ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS"))
@@ -240,6 +287,8 @@ public:
       Matcher.addMatcher(RepairableUninitVar, &HandlerForUninitVars);
     if (getenv("ANGELIX_MISSING_LOOP_BREAKS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableMissingLoopBreak, &HandlerForMissingLoopBreaks);
+    if (getenv("ANGELIX_MISSING_LOOP_CONTINUES_DEFECT_CLASS"))
+      Matcher.addMatcher(RepairableMissingLoopContinue, &HandlerForMissingLoopContinues);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -251,6 +300,7 @@ private:
   IfToElseIfHandler HandlerForIfToElseIfs;
   UninitVarHandler HandlerForUninitVars;
   MissingLoopBreakHandler HandlerForMissingLoopBreaks;
+  MissingLoopContinueHandler HandlerForMissingLoopContinues;
   MatchFinder Matcher;
 };
 
