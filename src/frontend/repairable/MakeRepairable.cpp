@@ -154,16 +154,27 @@ public:
       if (!insideSuspiciousScope(declS, Result.Context, srcMgr))
         return;
 
-      if (!declS->isSingleDecl())
-        return;
-
-      const Decl *d = declS->getSingleDecl();
-      if (!isa<VarDecl>(d))
-        return;
-
-      const VarDecl *vd = cast<VarDecl>(d);
-      if (!vd->getType().getTypePtr()->isIntegerType())
-        return;
+      std::ostringstream stringStream;
+      for (DeclStmt::const_decl_iterator it = declS->decl_begin(),
+                                         end = declS->decl_end();
+           it != end; ++it) {
+        const Decl *d = *it;
+        if (!isa<VarDecl>(d))
+          return;
+        const VarDecl *vd = cast<VarDecl>(d);
+        if (!vd->getType().getTypePtr()->isIntegerType())
+          return;
+        std::string init = "0";
+        if (vd->hasInit())
+          init = toString(vd->getInit());
+        if (stringStream.tellp() != std::streampos(0))
+          stringStream << "\n";
+        stringStream << vd->getType().getAsString() << " "
+                     << vd->getNameAsString()
+                     << " = "
+                     << init
+                     << ";";
+      }
 
       unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
       unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
@@ -173,10 +184,6 @@ public:
       std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
                 << toString(declS) << "\n";
 
-      std::ostringstream stringStream;
-      stringStream << vd->getType().getAsString() << " "
-                   << vd->getNameAsString()
-                   << " = 0;";
       std::string replacement = stringStream.str();
 
       Rewrite.ReplaceText(expandedLoc, replacement);
