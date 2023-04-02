@@ -60,7 +60,7 @@ DEFAULT_DEFECTS = ['if-conditions', 'assignments']
 TRANSFORM_DEFECTS = [
     'uninit-vars',
     'if-to-elseifs',
-    'missing-elseifs'
+    'missing-elseifs',
     'missing-returns',
     'missing-loop-breaks',
     'missing-loop-continues'
