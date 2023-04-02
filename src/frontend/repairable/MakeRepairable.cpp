@@ -15,7 +15,7 @@ bool insideSuspiciousScope(const clang::Stmt* expr, ASTContext* context, SourceM
   ArrayRef<ast_type_traits::DynTypedNode> parents = context->getParents(*expr);
   if (parents.size() > 0) {
     const ast_type_traits::DynTypedNode parentNode = *(parents.begin());
-    const CompoundStmt *parent = parentNode.get<CompoundStmt>();
+    const Stmt *parent = parentNode.get<Stmt>();
     if (!parent)
       return false;
 
