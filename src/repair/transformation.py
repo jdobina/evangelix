@@ -34,6 +34,8 @@ class BuggyTransformer:
             environment['ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS'] = 'YES'
         elif defect == 'uninit-vars':
             environment['ANGELIX_UNINIT_VARS_DEFECT_CLASS'] = 'YES'
+        elif defect == 'missing-loop-breaks':
+            environment['ANGELIX_MISSING_LOOP_BREAKS_DEFECT_CLASS'] = 'YES'
         else:
             return False
         environment['ANGELIX_SUSPICIOUS_LINE'] = str(suspicious_line)

@@ -182,17 +182,64 @@ private:
 };
 
 
+class MissingLoopBreakHandler : public MatchFinder::MatchCallback {
+public:
+  MissingLoopBreakHandler(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const CompoundStmt *stmt = Result.Nodes.getNodeAs<clang::CompoundStmt>("repairable")) {
+      SourceManager &srcMgr = Rewrite.getSourceMgr();
+      const LangOptions &langOpts = Rewrite.getLangOpts();
+
+      if (insideMacro(stmt, srcMgr, langOpts))
+        return;
+
+      SourceRange expandedLoc = getExpandedLoc(stmt, srcMgr);
+
+      std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+      if (srcMgr.getMainFileID() != decLoc.first)
+        return;
+
+      if (!insideSuspiciousScope(stmt, Result.Context, srcMgr))
+        return;
+
+      unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+      unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+      unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+      unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+      std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+                << toString(stmt) << "\n";
+
+      std::ostringstream stringStream;
+      stringStream << "    "
+                   << "if (0) break;"
+                   << "\n";
+      std::string insertion = stringStream.str();
+
+      Rewrite.InsertText(stmt->getLocEnd(), insertion, true, true);
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+
+
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R) : HandlerForMissingReturns(R),
                                HandlerForIfToElseIfs(R),
-                               HandlerForUninitVars(R) {
+                               HandlerForUninitVars(R),
+                               HandlerForMissingLoopBreaks(R) {
     if (getenv("ANGELIX_MISSING_RETURNS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableMissingReturn, &HandlerForMissingReturns);
     if (getenv("ANGELIX_IF_TO_ELSEIFS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableIfToElseIf, &HandlerForIfToElseIfs);
     if (getenv("ANGELIX_UNINIT_VARS_DEFECT_CLASS"))
       Matcher.addMatcher(RepairableUninitVar, &HandlerForUninitVars);
+    if (getenv("ANGELIX_MISSING_LOOP_BREAKS_DEFECT_CLASS"))
+      Matcher.addMatcher(RepairableMissingLoopBreak, &HandlerForMissingLoopBreaks);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -203,6 +250,7 @@ private:
   MissingReturnHandler HandlerForMissingReturns;
   IfToElseIfHandler HandlerForIfToElseIfs;
   UninitVarHandler HandlerForUninitVars;
+  MissingLoopBreakHandler HandlerForMissingLoopBreaks;
   MatchFinder Matcher;
 };
 

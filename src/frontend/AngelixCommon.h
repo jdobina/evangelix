@@ -268,6 +268,22 @@ StatementMatcher RepairableUninitVar =
           ).bind("repairable");
 
 
+StatementMatcher RepairableMissingLoopBreak =
+  anyOf(whileStmt(hasDescendant(compoundStmt(unless(hasDescendant(breakStmt()
+                                                                 )
+                                                   )
+                                            ).bind("repairable")
+                               )
+                 ),
+        forStmt(hasDescendant(compoundStmt(unless(hasDescendant(breakStmt()
+                                                               )
+                                                 )
+                                          ).bind("repairable")
+                             )
+               )
+       );
+
+
 //TODO: currently these selectors are not completely orthogonal
 // for example, if RHS of assignment contains if condition like here:
 // x = ({ if (...) {...}; 1; });
