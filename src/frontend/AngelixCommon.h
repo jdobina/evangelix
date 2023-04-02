@@ -300,6 +300,17 @@ StatementMatcher RepairableMissingLoopContinue =
        );
 
 
+StatementMatcher RepairableMissingElseIf =
+  ifStmt(anyOf(hasThen(RepairableAssignment),
+               hasThen(compoundStmt(hasDescendant(RepairableAssignment),
+                                    statementCountIs(1)
+                                   )
+                      )
+              ),
+         unless(hasDescendant(ifStmt()))
+        ).bind("repairable");
+
+
 //TODO: currently these selectors are not completely orthogonal
 // for example, if RHS of assignment contains if condition like here:
 // x = ({ if (...) {...}; 1; });

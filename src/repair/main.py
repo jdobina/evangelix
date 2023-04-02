@@ -50,7 +50,8 @@ DEFECT_CLASSES = ['if-conditions',
                   'if-to-elseifs',
                   'uninit-vars',
                   'missing-loop-breaks',
-                  'missing-loop-continues']
+                  'missing-loop-continues',
+                  'missing-elseifs']
 
 
 DEFAULT_DEFECTS = ['if-conditions', 'assignments']
@@ -59,6 +60,7 @@ DEFAULT_DEFECTS = ['if-conditions', 'assignments']
 TRANSFORM_DEFECTS = [
     'uninit-vars',
     'if-to-elseifs',
+    'missing-elseifs'
     'missing-returns',
     'missing-loop-breaks',
     'missing-loop-continues'
