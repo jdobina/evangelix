@@ -12,29 +12,35 @@ bool insideSuspiciousScope(const clang::Stmt* expr, ASTContext* context, SourceM
   }
   unsigned suspicious_line = atoi(suspicious_line_env);
 
+  const CompoundStmt *parent = nullptr;
   ArrayRef<ast_type_traits::DynTypedNode> parents = context->getParents(*expr);
-  if (parents.size() > 0) {
+  while (parents.size() > 0) {
     const ast_type_traits::DynTypedNode parentNode = *(parents.begin());
-    const Stmt *parent = parentNode.get<Stmt>();
-    if (!parent)
-      return false;
-
-    SourceRange expandedLoc = getExpandedLoc(parent, srcMgr);
-    std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
-    if (srcMgr.getMainFileID() != decLoc.first)
-      return false;
-
-    unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
-    unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
-    unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
-    unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
-
-    std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
-              << toString(parent) << "\n";
-
-    if ((suspicious_line >= beginLine) && (suspicious_line <= endLine))
-      return true;
+    if ((parent = parentNode.get<CompoundStmt>()))
+      break;
+    parents = context->getParents(parentNode);
   }
+
+  if (!parent) {
+    std::cerr << "can't get parent compound statement\n";
+    return false;
+  }
+
+  SourceRange expandedLoc = getExpandedLoc(parent, srcMgr);
+  std::pair<FileID, unsigned> decLoc = srcMgr.getDecomposedExpansionLoc(expandedLoc.getBegin());
+  if (srcMgr.getMainFileID() != decLoc.first)
+    return false;
+
+  unsigned beginLine = srcMgr.getExpansionLineNumber(expandedLoc.getBegin());
+  unsigned beginColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getBegin());
+  unsigned endLine = srcMgr.getExpansionLineNumber(expandedLoc.getEnd());
+  unsigned endColumn = srcMgr.getExpansionColumnNumber(expandedLoc.getEnd());
+
+  std::cout << beginLine << " " << beginColumn << " " << endLine << " " << endColumn << "\n"
+            << toString(parent) << "\n";
+
+  if ((suspicious_line >= beginLine) && (suspicious_line <= endLine))
+    return true;
 
   return false;
 }
