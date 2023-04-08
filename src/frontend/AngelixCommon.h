@@ -257,9 +257,9 @@ StatementMatcher RepairableIfToElseIf =
                                     unless(hasElse(anything()))
                                    ).bind("x")
                             ),
-               forEachDescendant(ifStmt(unless(equalsBoundNode("x"))
-                                       ).bind("repairable")
-                                )
+               hasDescendant(ifStmt(unless(equalsBoundNode("x"))
+                                   ).bind("repairable")
+                            )
               );
 
 
