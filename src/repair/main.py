@@ -310,10 +310,10 @@ class Angelix:
     def update_fix(self, fix, pos, neg):
         if not neg:
             self.fixes.append(fix)
-        elif ((self.partial_fix is None and (len(neg) < len(self.negative_tests)))
-              or (self.partial_fix and (len(neg) < len(self.partial_fix[2])))):
+        elif len(neg) < len(self.reduced_negative_tests):
             logger.info('Saving partial fix')
             self.partial_fix = (fix, pos, neg)
+            self.reduced_negative_tests = neg.copy()
 
 
     def fix_to_diff(self, fix):
@@ -358,6 +358,7 @@ class Angelix:
 
 
     def generate_patch(self):
+        self.reduced_negative_tests = None
         patches = []
         partial_patch = None
         transform_defects = TRANSFORM_DEFECTS.copy()
@@ -375,6 +376,9 @@ class Angelix:
             if len(suspicious) == 0:
                 logger.error('no suspicious expressions localized')
                 exit(0)
+
+            if self.reduced_negative_tests is None:
+                self.reduced_negative_tests = self.negative_tests.copy()
 
             repaired = len(self.negative_tests) == 0
             top_suspicious_line = suspicious[0][0][0]
