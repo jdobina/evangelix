@@ -259,7 +259,8 @@ StatementMatcher RepairableIfToElseIf =
                                    ).bind("tail_if")
                             ),
                hasDescendant(ifStmt(unless(equalsBoundNode("first_if")),
-                                    unless(equalsBoundNode("tail_if"))
+                                    unless(equalsBoundNode("tail_if")),
+                                    unless(hasParent(ifStmt()))
                                    ).bind("repairable")
                             )
               );
