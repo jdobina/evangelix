@@ -253,11 +253,13 @@ StatementMatcher RepairableMissingReturn =
 
 
 StatementMatcher RepairableIfToElseIf =
-  compoundStmt(hasDescendant(ifStmt(hasThen(anything()),
+  compoundStmt(hasDescendant(ifStmt().bind("first_if")),
+               hasDescendant(ifStmt(hasThen(anything()),
                                     unless(hasElse(anything()))
-                                   ).bind("x")
+                                   ).bind("tail_if")
                             ),
-               hasDescendant(ifStmt(unless(equalsBoundNode("x"))
+               hasDescendant(ifStmt(unless(equalsBoundNode("first_if")),
+                                    unless(equalsBoundNode("tail_if"))
                                    ).bind("repairable")
                             )
               );
