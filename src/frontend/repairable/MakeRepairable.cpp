@@ -315,21 +315,19 @@ public:
                 << toString(ifS) << "\n";
 
       const Stmt *then = ifS->getThen();
-      unsigned offset = 1;
-      std::string colon = "";
+      std::string semicolon = "";
       if (isa<BinaryOperator>(then)) {
-        offset = 2;
-        colon = ";";
+        semicolon = ";";
       }
       std::ostringstream stringStream;
-      stringStream << "\n"
+      stringStream << toString(then)
+                   << semicolon
+                   << "\n"
                    << "else if (1) "
-                   << toString(then)
-                   << colon;
+                   << "\n";
       std::string insertion = stringStream.str();
 
-      Rewrite.InsertText(then->getLocEnd().getLocWithOffset(offset),
-                         insertion, true, true);
+      Rewrite.InsertText(then->getLocStart(), insertion, true, true);
     }
   }
 
