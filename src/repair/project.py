@@ -167,6 +167,8 @@ def build_in_env(dir, cmd, subproc_output, config, env=os.environ):
             for line in lines:
                 logger.warning("failed to build {}".format(relpath(line.strip())))
 
+    return return_code
+
 
 def build_with_cc(dir, cmd, stderr, cc, config):
     env = dict(os.environ)
@@ -179,13 +181,15 @@ class Validation(Project):
     def build(self):
         logger.info('building {} source'.format(basename(self.dir)))
         compile_start_time = time.time()
-        build_in_env(self.dir, self.build_cmd,
-                     subprocess.DEVNULL if self.config['mute_build_message']
-                     else self.subproc_output,
-                     self.config)
+        rc = build_in_env(self.dir, self.build_cmd,
+                          subprocess.DEVNULL if self.config['mute_build_message']
+                          else self.subproc_output,
+                          self.config)
         compile_end_time = time.time()
         compile_elapsed = compile_end_time - compile_start_time
         statistics.data['time']['compilation'] += compile_elapsed
+
+        return rc
 
 
     def export_compilation_db(self):

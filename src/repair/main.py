@@ -488,8 +488,11 @@ class Angelix:
                 self.validation_src.restore_buggy()
                 transform = self.validation_src.transform_buggy(td, top_suspicious_line)
                 if transform is not None:
+                    rc = self.validation_src.build()
+                    if rc != 0:
+                        remove_tds.append(td)
+                        continue
                     logger.info('applied \'{}\' transform'.format(td))
-                    self.validation_src.build()
                     pos, neg = self.evaluate(self.validation_src)
                     logger.info(('positive tests: {}, negative tests: {}'
                                 ).format(pos, neg))
