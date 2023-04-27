@@ -162,7 +162,8 @@ public:
         if (!isa<VarDecl>(d))
           return;
         const VarDecl *vd = cast<VarDecl>(d);
-        if (!vd->getType().getTypePtr()->isIntegerType())
+        if (!vd->getType().getTypePtr()->isIntegerType()
+            && !vd->getType().getTypePtr()->isPointerType())
           return;
         std::string init = "0";
         if (vd->hasInit())
