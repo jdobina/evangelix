@@ -217,6 +217,7 @@ class Angelix:
                     self.golden_src.build()
                     golden_is_built = True
                 self.dump += test
+            if self.golden_src is not None:
                 result = self.run_test(self.golden_src, test, dump=self.dump[test])
                 if not result:
                     excluded.append(test)
